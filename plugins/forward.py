@@ -11,7 +11,7 @@ IST = pytz.timezone('Asia/Kolkata')
 MessageCount = 0
 BOT_STATUS = "0"
 status = set(int(x) for x in BOT_STATUS.split())
-OWNER = Config.OWNER_ID
+OWNER = int(Config.OWNER_ID)
 
 @Client.on_message(filters.command("status"))
 async def count(bot, m):
@@ -22,8 +22,6 @@ async def count(bot, m):
 
 @Client.on_message(filters.command('total'))
 async def total(bot, message):
-    if message.from_user.id not in OWNER:
-        return await message.reply_text("Who the hell are you!!")
     msg = await message.reply("Counting total messages in DB...", quote=True)
     try:
         total = await Data.count_documents()
@@ -33,8 +31,6 @@ async def total(bot, message):
 
 @Client.on_message(filters.command('cleardb'))
 async def clrdb(bot, message):
-    if message.from_user.id not in OWNER:
-        return await message.reply_text("Who the hell are you!!")
     msg = await message.reply("Clearing files from DB...", quote=True)
     try:
         await Data.collection.drop()
@@ -45,13 +41,11 @@ async def clrdb(bot, message):
 @Client.on_message(filters.command("forward"))
 async def forward(bot, message):
     global MessageCount
-    if message.from_user.id not in OWNER:
-        return await message.reply_text("Who the hell are you!!")
     if 1 in status:
         await message.reply_text("A task is already running.")
         return
 
-    m = await bot.send_message(chat_id=message.from_user.id, text="Started Forwarding....")
+    m = await bot.send_message(chat_id=OWNER, text="Started Forwarding")
 
     while await Data.count_documents() != 0:
         data = await get_search_results()
@@ -59,21 +53,43 @@ async def forward(bot, message):
             to_chat=Config.TO_CHANNEL 
             file_id=msg.id
             caption=msg.caption
+            file_type=msg.file_type
+            channel_id=msg.channel_id
+            message_id=msg.message_id
             try:
-                try:
-                    await bot.send_cached_media(
-                        chat_id=to_chat,
-                        file_id=file_id,
-                        caption=caption
-                    )
-                except FloodWait as e:
-                    await asyncio.sleep(e.value)
-                    await bot.send_cached_media(
-                        chat_id=to_chat,
-                        file_id=file_id,
-                        caption=caption
-                    )               
-                await asyncio.sleep(1)
+                if file_type == "media":
+                    try:
+                        await bot.send_cached_media(
+                            chat_id=to_chat,
+                            file_id=file_id,
+                            caption=caption
+                        )
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+                        await bot.copy_message(
+                            chat_id=to_chat,
+                            file_id=file_id,
+                            caption=caption
+                        )               
+                    await asyncio.sleep(1)
+                if file_type == "messages":
+                    try:
+                        await bot.copy_message(
+                            chat_id=to_chat,
+                            from_chat_id=channel_id,
+                            parse_mode=enums.ParseMode.MARKDOWN,       
+                            caption=caption,
+                            message_id=message_id
+                        )
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+                        await bot.copy_message(
+                            chat_id=to_chat,
+                            from_chat_id=channel_id,
+                            parse_mode=enums.ParseMode.MARKDOWN,       
+                            caption=caption,
+                            message_id=message_id
+                        )
                 try:
                     status.add(1)
                 except:
@@ -83,7 +99,10 @@ async def forward(bot, message):
                 pass
 
             await Data.collection.delete_one({
-                'use': 'forward'
+                'use': 'forward',
+                'file_type': file_type,
+                'channel_id': channel_id,
+                'message_id': message_id
                 })
 
             MessageCount += 1
