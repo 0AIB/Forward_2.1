@@ -19,19 +19,24 @@ instance = Instance.from_db(database)
 
 @instance.register
 class Data(Document):
-    id = fields.StrField(attribute='_id', required=True)
+    id = fields.StrField(attribute='_id')
     use = fields.StrField(required=True)
-    caption = fields.StrField(required=True)
-
+    caption = fields.StrField(allow_none=True)
+    file_type = fields.StrField(required=True)
+    channel_id = fields.StrField(allow_none=True)
+    message_id = fields.StrField(allow_none=True)
     class Meta:
         collection_name = COLLECTION_NAME
 
-async def save_data(id, caption):
+async def save_data(id, caption, file_type, channel_id, message_id):
     try:
         data = Data(
             id=id,
             use = "forward",
-            caption=caption          
+            caption=caption,
+            file_type=file_type,
+            channel_id=channel_id,
+            message_id=message_id
         )
     except ValidationError:
         logger.exception('Error occurred while saving file in database')
@@ -51,4 +56,3 @@ async def get_search_results():
     cursor.skip(0).limit(1)
     Messages = await cursor.to_list(length=1)
     return Messages
-
